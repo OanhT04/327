@@ -87,7 +87,10 @@ class PubSub:
                     victims.append(sub)
 
         # Back-pressure: disconnect slow subscribers
-        for sub in victims:
+        for subId in victims:
+            sub = self.subscribers.pop(subId, None)
+            if not sub:
+                continue
             if sub.conn:
                 try:
                     sub.conn.close()
@@ -112,5 +115,5 @@ class PubSub:
                     sub.conn.sendall(msg.encode("utf-8"))
                 except Exception:
                     sub.connected = False
-
-            time.sleep(0.01)
+            #1ms
+            time.sleep(0.001)
