@@ -1,4 +1,4 @@
-# tpc.py
+# tcp.py
 import json
 
 def textClient(server, conn, addr):

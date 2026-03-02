@@ -37,116 +37,7 @@ Asynchronous messaging:
 """
 
 
-# ---- Data model for one lot ----
-class LotState:
-    def __init__(self, lotId, capacity):
-        self.lotId = lotId
-        self.capacity = capacity
-        self.occupiedPhysical = 0
-        self.reservations = {}
-
-
-class ParkingState:
-    def __init__(self, lots, reservationTtlSec):
-        # lock protects all shared state changes (reserve/cancel/sensor/expire)
-        self.lock = threading.RLock()
-        self.ttl = reservationTtlSec
-        self.lots = {}
-        for lotId, cap in lots.items():
-            self.lots[lotId] = LotState(lotId, int(cap))
-
-    def freeCountLocked(self, lot):
-        return lot.capacity - lot.occupiedPhysical - len(lot.reservations)
-
-    def allLots(self):
-        with self.lock:
-            result = []
-            for lot in self.lots.values():
-                free = self.freeCountLocked(lot)
-                occupiedTotal = lot.occupiedPhysical + len(lot.reservations)
-                result.append(
-                    {"id": lot.lotId, "capacity": lot.capacity, "occupied": occupiedTotal, "free": free}
-                )
-            return result
-
-    def availability(self, lotId):
-        with self.lock:
-            if lotId not in self.lots:
-                raise KeyError("unknown lot")
-            lot = self.lots[lotId]
-            return self.freeCountLocked(lot)
-
-    def reserve(self, lotId, plate):
-        # lock ensures no overbooking under concurrency
-        with self.lock:
-            if lotId not in self.lots:
-                raise KeyError("unknown lot")
-            lot = self.lots[lotId]
-            freeBefore = self.freeCountLocked(lot)
-
-            if plate in lot.reservations:
-                return False, "EXISTS", False
-            if freeBefore <= 0:
-                return False, "FULL", False
-
-            # Reservation is TTL-based; expiration handled by expireLoop()
-            lot.reservations[plate] = time.time() + self.ttl
-            freeAfter = self.freeCountLocked(lot)
-
-            log.info(json.dumps({"type": "reserve", "lotId": lotId, "plate": plate, "ts": int(time.time() * 1000), "result": "OK"}))
-            return True, "OK", freeAfter != freeBefore
-
-    def cancel(self, lotId, plate):
-        with self.lock:
-            if lotId not in self.lots:
-                raise KeyError("unknown lot")
-            lot = self.lots[lotId]
-            freeBefore = self.freeCountLocked(lot)
-
-            if plate not in lot.reservations:
-                return False, "NOT_FOUND", False
-
-            del lot.reservations[plate]
-            freeAfter = self.freeCountLocked(lot)
-
-            log.info(json.dumps({"type": "cancel", "lotId": lotId, "plate": plate, "ts": int(time.time() * 1000), "result": "OK"}))
-            return True, "OK", freeAfter != freeBefore
-
-    def applySensorUpdate(self, lotId, delta):
-        # sensor update clamps occupancy so it never exceeds capacity minus reservations
-        with self.lock:
-            if lotId not in self.lots:
-                raise KeyError("unknown lot")
-            lot = self.lots[lotId]
-            freeBefore = self.freeCountLocked(lot)
-            lot.occupiedPhysical += delta
-            if lot.occupiedPhysical < 0:
-                lot.occupiedPhysical = 0
-            maxPhysical = max(0, lot.capacity - len(lot.reservations))
-            if lot.occupiedPhysical > maxPhysical:
-                lot.occupiedPhysical = maxPhysical
-
-            freeAfter = self.freeCountLocked(lot)
-            log.info(json.dumps({"type": "sensor_update", "lotId": lotId, "delta": delta, "occupiedPhysical": lot.occupiedPhysical, "ts": int(time.time() * 1000)}))
-            return freeAfter, freeAfter != freeBefore
-
-    def expireOnce(self):
-        # Rubric: automatic expiration of reservations (TTL)
-        now = time.time()
-        changed = []
-        with self.lock:
-            for lot in self.lots.values():
-                freeBefore = self.freeCountLocked(lot)
-                expired = [p for p, exp in lot.reservations.items() if exp <= now]
-                if not expired:
-                    continue
-                for plate in expired:
-                    del lot.reservations[plate]
-                    log.info(json.dumps({"type": "reservation_expired", "lotId": lot.lotId, "plate": plate, "ts": int(time.time() * 1000)}))
-                freeAfter = self.freeCountLocked(lot)
-                if freeAfter != freeBefore:
-                    changed.append((lot.lotId, freeAfter))
-        return changed
+from state import ParkingState
 
 
 class ParkingServer:
@@ -264,87 +155,19 @@ class ParkingServer:
         return rpc.rpcClient(self, conn, addr)
 
     def sensorClient(self, conn, addr):
-        # Note: socket timeout prevents dead clients hanging forever
-        conn.settimeout(60)
-        f = conn.makefile("rwb")
-        while not self.stopEvent.is_set():
-            line = f.readline()
-            if not line:
-                return
-            line = line.decode("utf-8", errors="replace").strip()
-            if not line:
-                continue
-
-            parts = line.split()
-            if len(parts) != 3 or parts[0].upper() != "UPDATE":
-                f.write(b"ERROR bad_update\n")
-                f.flush()
-                continue
-
-            lotId = parts[1]
-            try:
-                delta = int(parts[2])
-            except ValueError:
-                delta = 0
-
-            # Rubric: enqueue sensor updates (non-blocking ingestion)
-            try:
-                self.sensorQueue.put_nowait((lotId, delta))
-                f.write(b"OK\n")
-            except queue.Full:
-                f.write(b"ERROR server_saturated\n")
-
-            f.flush()
+        # Sensor ingestion is handled in sensor.py (async enqueue path)
+        import sensor
+        return sensor.sensorClient(self, conn, addr)
 
     def sensorWorkerLoop(self):
-        # worker threads apply sensor updates asynchronously
-        while not self.stopEvent.is_set():
-            try:
-                lotId, delta = self.sensorQueue.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            try:
-                free, changed = self.state.applySensorUpdate(lotId, delta)
-                if changed:
-                    self.pubsub.publish(lotId, free)
-            except KeyError:
-                pass
+        # Sensor update workers live in sensor.py
+        import sensor
+        return sensor.sensorWorkerLoop(self)
 
     def eventsClient(self, conn, addr):
-        # separate TCP connection for push notifications (does not block RPC)
-        conn.settimeout(30)
-        f = conn.makefile("rwb")
-        first = f.readline()
-        if not first:
-            return
-        first = first.decode("utf-8", errors="replace").strip()
-        parts = first.split()
-
-        if len(parts) != 2 or parts[0].upper() != "SUB":
-            f.write(b"ERROR expected: SUB <subId>\n")
-            f.flush()
-            return
-
-        subId = parts[1]
-        ok = self.pubsub.attachConnection(subId, conn)
-        if not ok:
-            f.write(b"ERROR unknown_subId\n")
-            f.flush()
-            return
-        f.write(b"OK\n")
-        f.flush()
-
-        # Keep alive until client disconnects (does not send data normally)
-        conn.settimeout(60)
-        while not self.stopEvent.is_set():
-            try:
-                b = conn.recv(1)
-                if not b:
-                    return
-            except socket.timeout:
-                continue
-            except Exception:
-                return
+        # Event (pub/sub) connection handling lives in events.py
+        import events
+        return events.eventsClient(self, conn, addr)
 
     def expireLoop(self):
         while not self.stopEvent.is_set():

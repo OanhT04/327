@@ -3,7 +3,7 @@ import threading
 import time
 
 
-# The server does NOT send messages directly from the publisher
+# The server does not send messages directly from the publisher
 # (e.g., reserve(), cancel(), or sensor updates) to clients.
 # Instead, it uses message queues:
 #

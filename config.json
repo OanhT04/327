@@ -1,0 +1,21 @@
+{
+"ports": {
+    "text": 5000,
+    "rpc": 5001,
+    "sensor": 5002,
+    "events": 5003
+},
+
+"lots": {
+    "A": 50,
+    "B": 80,
+    "C": 30
+},
+
+"reservation_ttl_sec": 300,
+"sensor_workers": 3,
+"client_limit": 200,
+"listen_backlog": 200,
+"per_sub_queue_max": 128,
+"sensor_queue_max": 10000
+}
