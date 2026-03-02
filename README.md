@@ -209,9 +209,18 @@ Example async stress:
 python test.py --spam-sensor 5000 --sensor-delta 1 --sleep 0
 ```
 
+Test Results:
+```bash
+python server.py --config config.json
+```
+then in a separate terminal:
+```bash
+python run_all_tests.py
+```
+
 ### Authors:
 **Sovannmonyrotn Kun:** handles the README file, requirements.txt, debugging and checking for any errors.
 
-**David Tran:** handles the written report.
+**David Tran:** handles the written report and testing.
 
 **Oanh Tran:** handles the python program
