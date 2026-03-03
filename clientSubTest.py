@@ -1,7 +1,7 @@
-import argparse
-import json
-import socket
-import struct
+import argparse # Importing argparse module to parse command line arguments
+import json # Importing json module to handle JSON file
+import socket # Importing socket module to allow TCP connection
+import struct # Importing struct for binary data
 
 #### DEMO for testing as sub
 
@@ -9,14 +9,14 @@ import struct
 # RPC framing helpers
 # -----------------------
 
-def recvExact(sock, size):
-    data = b""
-    while len(data) < size:
-        chunk = sock.recv(size - len(data))
-        if not chunk:
+def recvExact(sock, size): 
+    data = b"" # Initializing an empty byte string that will be used to store results
+    while len(data) < size: # This while loop will run until the length of data is greater than or equal to size
+        chunk = sock.recv(size - len(data)) # Reading the byte from the socket buffer
+        if not chunk: # If the byte is empty, raise error that connection is dropped
             raise ConnectionError("connection closed")
-        data += chunk
-    return data
+        data += chunk # Adding the byte to the byte string
+    return data # Returning the complete byte string
 
 
 def sendRpc(host, port, rpcId, method, args):
