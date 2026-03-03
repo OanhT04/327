@@ -20,20 +20,20 @@ def recvExact(sock, size):
 
 
 def sendRpc(host, port, rpcId, method, args):
-    request = {
+    request = { # Initializing a dictionary to represents rpc request
         "rpcId": rpcId,
         "method": method,
         "args": args
     }
-    payload = json.dumps(request).encode("utf-8")
-    frame = struct.pack(">I", len(payload)) + payload
-    with socket.create_connection((host, port)) as sock:
-        sock.sendall(frame)
-        header = recvExact(sock, 4)
-        length = struct.unpack(">I", header)[0]
-        body = recvExact(sock, length)
-        reply = json.loads(body.decode())
-        return reply
+    payload = json.dumps(request).encode("utf-8") # Converting the dictionary to UTF-8
+    frame = struct.pack(">I", len(payload)) + payload # Prepending the payload
+    with socket.create_connection((host, port)) as sock: # Opening a TCP connection
+        sock.sendall(frame) # Sending the message frame
+        header = recvExact(sock, 4) # Getting the header length by reading the first 4 bytes
+        length = struct.unpack(">I", header)[0] # Coverting the bytes into python ineger
+        body = recvExact(sock, length) # Reading "length" bytes for the JSON response
+        reply = json.loads(body.decode()) # Decoding the bytes then parsing it into the dictionary
+        return reply # Returning the dictionary
 
 
 # -----------------------
@@ -42,41 +42,41 @@ def sendRpc(host, port, rpcId, method, args):
 
 def runSubscriber(host, rpcPort, eventsPort, lotId):
 
-    print("Subscribing to lot:", lotId)
-    reply = sendRpc(
+    print("Subscribing to lot:", lotId) # Printing the subscribed lot ID to the log
+    reply = sendRpc( # Doing a RPC call to register the subscribed lot
         host,
         rpcPort,
         1,
         "subscribe",
         [lotId]
     )
-    if reply["error"]:
-        print("RPC error:", reply["error"])
-        return
-    subId = reply["result"]
-    print("Subscription ID:", subId)
+    if reply["error"]: # Checking if the server return an error message
+        print("RPC error:", reply["error"]) # Printing the error message if the server returns an error message
+        return # Exiting the function once done
+    subId = reply["result"] # Getting the subscription ID from the server's response
+    print("Subscription ID:", subId) # Printing the the successful subscription ID to the log
     
     # Connect to events port
     sock = socket.create_connection((host, eventsPort))
 
-    sock.sendall(f"SUB {subId}\n".encode())
+    sock.sendall(f"SUB {subId}\n".encode()) # Sending SUB command with its id to the event server
 
     # Expect OK
     data = sock.recv(100).decode().strip()
-    if data != "OK":
+    if data != "OK": # If the server doesn't respond with an "OK", print the failure message
         print("Subscription failed:", data)
         return
 
-    print("Connected. Waiting for events...\n")
+    print("Connected. Waiting for events...\n") # Print to the log that is is constantly waiting for data
     # Receive events forever
-    while True:
-        line = sock.recv(4096)
+    while True: # Creating an infinite loop that will listen for incoming events
+        line = sock.recv(4096) # Reading from the event stream
 
-        if not line:
+        if not line: # If its empty, it means that the socket is no longer running, and print the message to the log
             print("Disconnected")
             return
 
-        print(line.decode().strip())
+        print(line.decode().strip()) # Decoding the bytes and printing it to the console
 
 
 # -----------------------
@@ -85,15 +85,15 @@ def runSubscriber(host, rpcPort, eventsPort, lotId):
 
 def main():
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser() # Initializing parser for command-line arguments
 
-    parser.add_argument("--host", default="localhost")
-    parser.add_argument("--rpcPort", type=int, default=5001)
-    parser.add_argument("--eventsPort", type=int, default=5003)
+    parser.add_argument("--host", default="localhost") # Defining server address
+    parser.add_argument("--rpcPort", type=int, default=5001) # Defining port number for RPC
+    parser.add_argument("--eventsPort", type=int, default=5003) # Defining port number for Events
     #for testing
-    parser.add_argument("--lot", default="A")
+    parser.add_argument("--lot", default="A") # Defining specific lot to watch
 
-    args = parser.parse_args()
+    args = parser.parse_args() # Executing the command-line arguments
 
     runSubscriber(
         args.host,
