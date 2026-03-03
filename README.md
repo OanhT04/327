@@ -3,6 +3,7 @@
 For this assignment, we are implementing a concurrent parking system using TCP sockets. Throughout working on this assignment, we have learned the practical real-world experience of distributed systems conepts such as multithreading, RPC, and various more. And this allows us to explore and get more hands-on experience on the reservation requests and occupancy updates and how to run it efficiently at the same time.
 
 ## Requirements
+
 - Python 3
 
 ## Files
@@ -218,7 +219,8 @@ then in a separate terminal:
 python run_all_tests.py
 ```
 
-### Authors:
+## Authors:
+
 **Sovannmonyrotn Kun:** handles the README file, requirements.txt, debugging and checking for any errors.
 
 **David Tran:** handles the written report and testing.
