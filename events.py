@@ -1,5 +1,5 @@
 # events.py
-import socket
+import socket # Importing socket module to allow TCP connection
 
 def eventsClient(server, conn, addr):
     """Event delivery channel.
