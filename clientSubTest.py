@@ -9,7 +9,7 @@ import struct # Importing struct for binary data
 # RPC framing helpers
 # -----------------------
 
-def recvExact(sock, size): 
+def recvExact(sock, size): # This function will ensure that it will read "size" bytes from the socket
     data = b"" # Initializing an empty byte string that will be used to store results
     while len(data) < size: # This while loop will run until the length of data is greater than or equal to size
         chunk = sock.recv(size - len(data)) # Reading the byte from the socket buffer

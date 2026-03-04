@@ -1,6 +1,6 @@
 # rpc.py
-import json
-import struct
+import json # Importing json module to handle JSON file
+import struct # Importing struct for binary data
 
 """
 RPC Server
@@ -13,14 +13,14 @@ Reply:   {rpcId, result, error}
 """
 
 # ---- helpers ----
-def recvExact(conn, size):
-    data = b""
-    while len(data) < size:
-        chunk = conn.recv(size - len(data))
-        if not chunk:
+def recvExact(conn, size): # This function will ensure that it will read "size" bytes from the socket
+    data = b"" # Initializing an empty byte string that will be used to store results
+    while len(data) < size: # This while loop will run until the length of data is greater than or equal to size
+        chunk = conn.recv(size - len(data)) # Reading the byte from the socket buffer
+        if not chunk: # If the byte is empty, raise error that connection is dropped
             raise ConnectionError("peer closed")
-        data += chunk
-    return data
+        data += chunk # Adding the byte to the byte string
+    return data # Returning the complete byte string
 
 def recvFrame(conn, maxLen=1_000_000):
     header = recvExact(conn, 4)
