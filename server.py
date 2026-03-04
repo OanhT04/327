@@ -63,47 +63,47 @@ class ParkingServer:
         self.clientSem = threading.BoundedSemaphore(value=self.clientLimit)
 
     def listen(self, port):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((self.host, port))
-        s.listen(self.listenBacklog)
-        return s
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Creating a TCP socket
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # # Allowing port to be reused after restarts
+        s.bind((self.host, port)) # Binding to address and port
+        s.listen(self.listenBacklog) # Listening for connections
+        return s # Returning the socket
 
     def spawn(self, handler, conn, addr):
         # thread-per-connection:
         # each accepted TCP connection is handled by a dedicated thread.
-        if not self.clientSem.acquire(blocking=False):
+        if not self.clientSem.acquire(blocking=False): # Checking if thread limit is reached
             try:
-                conn.sendall(b"ERROR server_busy\n")
+                conn.sendall(b"ERROR server_busy\n") # Informing client the server is at capacity
             except Exception:
                 pass
             try:
-                conn.close()
+                conn.close() # Closing the connection
             except Exception:
                 pass
             return
 
         t = threading.Thread(target=self.wrapClient, args=(handler, conn, addr), daemon=True)
-        t.start()
+        t.start() # Executing the thread
 
     def wrapClient(self, handler, conn, addr):
         try:
-            handler(conn, addr)
+            handler(conn, addr) # Execute the specific protocol handler
         except Exception as e:
             log.error("client handler error %s:%s %s", addr[0], addr[1], e)
         finally:
             try:
-                conn.close()
+                conn.close() # Ensuring that the socket is closed after handling
             except Exception:
                 pass
-            self.clientSem.release()
+            self.clientSem.release() # Freeing up a thread slot in the semaphore
 
     def start(self):
         # Accept loops (each loop runs in its own thread, then spawns per-connection threads)
-        threading.Thread(target=self.acceptTextLoop, daemon=True).start()
-        threading.Thread(target=self.acceptRpcLoop, daemon=True).start()
-        threading.Thread(target=self.acceptSensorLoop, daemon=True).start()
-        threading.Thread(target=self.acceptEventsLoop, daemon=True).start()
+        threading.Thread(target=self.acceptTextLoop, daemon=True).start() # Starting text protocol loop
+        threading.Thread(target=self.acceptRpcLoop, daemon=True).start() # Starting RPC protocol loop
+        threading.Thread(target=self.acceptSensorLoop, daemon=True).start() # Starting sensor protocol loop
+        threading.Thread(target=self.acceptEventsLoop, daemon=True).start() # Starting the pubsub protocol loop
         # push notifications are non-blocking (notifier thread drains queues)
         threading.Thread(target=self.pubsub.notifierLoop, args=(self.stopEvent,), daemon=True).start()
 
@@ -117,32 +117,32 @@ class ParkingServer:
         try:
             while True:
                 time.sleep(0.5)
-        except KeyboardInterrupt:
+        except KeyboardInterrupt: # Handling Ctrl+C shutdown
             self.stopEvent.set()
 
     # ---- accept loops ----
     def acceptTextLoop(self):
-        srv = self.listen(self.textPort)
+        srv = self.listen(self.textPort) # Listeing on text port
         while not self.stopEvent.is_set():
-            conn, addr = srv.accept()
+            conn, addr = srv.accept() # Accepting incoming TCP connection
             self.spawn(self.textClient, conn, addr)
 
     def acceptRpcLoop(self):
-        srv = self.listen(self.rpcPort)
+        srv = self.listen(self.rpcPort) # Listening on RPC port
         while not self.stopEvent.is_set():
-            conn, addr = srv.accept()
+            conn, addr = srv.accept() # Accepting incoming TCP connection
             self.spawn(self.rpcClient, conn, addr)
 
     def acceptSensorLoop(self):
-        srv = self.listen(self.sensorPort)
+        srv = self.listen(self.sensorPort) # Listening on sensor port
         while not self.stopEvent.is_set():
-            conn, addr = srv.accept()
+            conn, addr = srv.accept() # Accepting incoming TCP connection
             self.spawn(self.sensorClient, conn, addr)
 
     def acceptEventsLoop(self):
-        srv = self.listen(self.eventsPort)
+        srv = self.listen(self.eventsPort) # Listening on pubsub events port
         while not self.stopEvent.is_set():
-            conn, addr = srv.accept()
+            conn, addr = srv.accept() # Accepting incoming TCP connection
             self.spawn(self.eventsClient, conn, addr)
 
     # Rubric: protocol separation (text + rpc handlers are split into modules)
@@ -169,14 +169,14 @@ class ParkingServer:
         return events.eventsClient(self, conn, addr)
 
     def expireLoop(self):
-        while not self.stopEvent.is_set():
-            changed = self.state.expireOnce()
-            for lotId, free in changed:
-                self.pubsub.publish(lotId, free)
+        while not self.stopEvent.is_set(): 
+            changed = self.state.expireOnce() # Cleaning expired spots and getting changed lots
+            for lotId, free in changed: # For every lot that changed availability
+                self.pubsub.publish(lotId, free) # Informing users about the change
             time.sleep(0.5)
 
 
-def loadConfig(path):
+def loadConfig(path): # This function will read JSON file
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -190,9 +190,9 @@ def main():
 
     logging.basicConfig(level=getattr(logging, args.loglevel.upper(), logging.INFO))
 
-    config = loadConfig(args.config)
-    server = ParkingServer(args.host, config)
-    server.start()
+    config = loadConfig(args.config) # Loading the settings
+    server = ParkingServer(args.host, config) # Initializing server
+    server.start() # Starting all operations
 
 
 if __name__ == "__main__":
