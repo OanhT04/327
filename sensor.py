@@ -12,7 +12,7 @@ def sensorClient(server, conn, addr):
         if not line: # If readline returns empty, the sensor disconnected, then terminate
             return
         line = line.decode("utf-8", errors="replace").strip() # Converting the bytes to string and remove whitespace
-        if not line: #If line is empty, then skip
+        if not line: # If line is empty, then skip
             continue
 
         parts = line.split() # Splitting the command into components
