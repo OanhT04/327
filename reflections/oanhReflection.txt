@@ -1,0 +1,34 @@
+Oanh Tran
+029661786
+
+Implemented:
+
+I implemented the initial code for TCP server using a thread‑per‑connection
+architecture where each TCP connection is handled by a dedicated thread.
+Because network operations such as recv() or readline() are blocking, a thread 
+may pause while waiting for data. The operating system scheduler allows other threads to continue
+executing, enabling the server to handle many clients simultaneously.
+
+I also implemented the RPC and Pub/Sub mechanisms that publish events
+when parking lot availability changes. Each subscriber has its own
+queue, and a notifier thread sends updates to connected clients. To enforce
+back‑pressure, each subscriber queue is bounded, 
+I created a test file to simulate what a subscriber receives when
+parking lot changes occur.
+
+RPC calls are synchronous because the client sends a request and waits
+for the server reply before continuing. In contrast, sensor updates handled
+asynchronously.
+
+small details
+ - bounded semaphore for when the limit is reached for client connections instead of spawning more threads
+- reorganized code into separate modules for clarity
+-  capacity clamping: when sensors update lots, checks the occupancy never exceedslot capacity - reservations
+- reconnection - old connection closes if subscriber reconnects
+- events with time stamp
+- time.sleep 1ms for stress test 
+- back log configuration - allows OS to queue incoming connections before accepted
+- time out for idle clients
+- daemon threads for background loops so they run continuously while server is active; avoids hanging threads and simply terminates when main program exits.
+
+
