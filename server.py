@@ -6,7 +6,6 @@ import queue
 import socket
 import threading
 import time
-
 from pubsub import PubSub
 import tcp
 import rpc
