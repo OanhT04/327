@@ -1,5 +1,6 @@
 # server.py
 import argparse # Importing argparse module to parse command line arguments
+import errno # Importing errno constants (e.g., EADDRINUSE)
 import json # Importing json module to handle JSON file
 import logging # Importing logging module for tracking server events
 import queue # Importing queue module to use FIFO queues for buffering
@@ -61,6 +62,43 @@ class ParkingServer:
 
         # thread-per-connection with backpressure (limit concurrent handlers)
         self.clientSem = threading.BoundedSemaphore(value=self.clientLimit)
+
+    def preflightPorts(self):
+        """Fail fast with a clear message if any configured port is unavailable."""
+        # Check every protocol port early so startup fails with one clear error
+        # instead of background thread tracebacks later.
+        ports = [
+            ("text", self.textPort),
+            ("rpc", self.rpcPort),
+            ("sensor", self.sensorPort),
+            ("events", self.eventsPort),
+        ]
+        # Keep sockets open during validation so checked ports stay reserved
+        # until all checks finish; then close them in finally.
+        checked = []
+        try:
+            for name, port in ports:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    sock.bind((self.host, port))
+                    checked.append(sock)
+                except OSError as e:
+                    if e.errno == errno.EADDRINUSE:
+                        raise RuntimeError(
+                            f"Port check failed: {name} port {port} is already in use. "
+                            "Update config.json ports or stop the conflicting process."
+                        ) from e
+                    raise RuntimeError(
+                        f"Port check failed: unable to bind {name} port {port}: {e}"
+                    ) from e
+        finally:
+            # Always release temporary validation sockets.
+            for sock in checked:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
 
     def listen(self, port):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Creating a TCP socket
@@ -192,6 +230,8 @@ def main():
 
     config = loadConfig(args.config) # Loading the settings
     server = ParkingServer(args.host, config) # Initializing server
+    # Validate configured ports before spinning up any accept loops.
+    server.preflightPorts()
     server.start() # Starting all operations
 
 
