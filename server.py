@@ -1,16 +1,16 @@
 # server.py
-import argparse
-import json
-import logging
-import queue
-import socket
-import threading
-import time
+import argparse # Importing argparse module to parse command line arguments
+import json # Importing json module to handle JSON file
+import logging # Importing logging module for tracking server events
+import queue # Importing queue module to use FIFO queues for buffering
+import socket # Importing socket module to allow TCP connection
+import threading # Importing threading module to do thread synchronization
+import time # Importing time module to use timestamps
 from pubsub import PubSub
-import tcp
-import rpc
+import tcp # Importing tcp module for plain text TCP protocol
+import rpc # Importing rpc module for length-prefixed JSON-RPC
 
-log = logging.getLogger("parking")
+log = logging.getLogger("parking") # Initializing logger for the parking namespace
 
 """
 Parking Lot
@@ -40,8 +40,8 @@ from state import ParkingState
 
 
 class ParkingServer:
-    def __init__(self, host, config):
-        self.host = host
+    def __init__(self, host, config): # This function will initialize server with host and configuration
+        self.host = host # Setting the host IP
         self.textPort = int(config["ports"]["text"])
         self.rpcPort = int(config["ports"]["rpc"])
         self.sensorPort = int(config["ports"]["sensor"])
